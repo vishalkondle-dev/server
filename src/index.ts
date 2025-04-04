@@ -1,30 +1,52 @@
 import { Hono } from "hono";
+import { bearerAuth } from "hono/bearer-auth";
+import { verify } from "hono/jwt";
 import { getPrisma } from "../lib/prisma";
+import authApp from "./auth";
 
 const app = new Hono<{
-  Bindings: { DATABASE_URL: string };
-  // Variables: { userId: string };
+  Bindings: {
+    DATABASE_URL: string;
+    JWT_ACCESS_SECRET: string;
+  };
 }>();
 
+// Auth Routes
+app.route("/auth", authApp);
+
+//! Auth MiddleWare
+app.use(
+  "/protected/*",
+  bearerAuth({
+    verifyToken: async (token, c) => {
+      try {
+        const payload = await verify(token, c.env.JWT_ACCESS_SECRET);
+        c.set("user", payload);
+        console.log(payload);
+        return !!payload;
+      } catch (error) {
+        return false;
+      }
+    },
+  })
+);
+
+//* Protected Routes
 app.get("/", async (c) => {
-  const prisma = getPrisma(c.env.DATABASE_URL);
-  const user = await prisma.user.create({
-    data: { email: String(Date.now()), name: "1", password: "1" },
-  });
-  return c.json(user);
+  return c.json("Home Page");
 });
 
-app.get("/users", async (c) => {
+app.get("/protected/users", async (c) => {
   const prisma = getPrisma(c.env.DATABASE_URL);
   const users = await prisma.user.findMany();
   return c.json(users);
 });
 
-app.post("/users", async (c) => {
+//* Public Routes
+app.get("/users", async (c) => {
   const prisma = getPrisma(c.env.DATABASE_URL);
-  const body = await c.req.json();
-  const user = await prisma.user.create({ data: body });
-  return c.json(user);
+  const users = await prisma.user.findMany();
+  return c.json(users);
 });
 
 export default app;
