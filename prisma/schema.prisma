@@ -30,3 +30,166 @@ model RefreshToken {
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 }
+
+model Player {
+  id                 String       @id @default(uuid())
+  name               String
+  dateOfBirth        DateTime
+  role               Role         @default(ALL_ROUNDER)
+  battingHand        Hand         @default(RIGHT)
+  bowlingHand        Hand         @default(RIGHT)
+  bowlingStyle       BowlingStyle @default(FAST)
+  teams              Team[]       @relation("teams")
+  // teamId             String
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  captainOf          Team[]       @relation("captainOf")
+  // team               Team         @relation("teams", fields: [teamId], references: [id])
+  strikerBalls       Ball[]       @relation("Striker")
+  nonStrikerBalls    Ball[]       @relation("NonStriker")
+  bowledBalls        Ball[]       @relation("Bowler")
+  dismissedBalls     Ball[]       @relation("OutBatsman")
+  fieldedBalls       Ball[]       @relation("Fielder")
+  assistFieldedBalls Ball[]       @relation("AssistFielder")
+}
+
+model Team {
+  id             String   @id @default(uuid())
+  name           String
+  playersIds     String[]
+  captainId      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  players        Player[] @relation("teams")
+  captain        Player   @relation("captainOf", fields: [captainId], references: [id])
+  homeMatches    Match[]  @relation("HomeMatches")
+  awayMatches    Match[]  @relation("AwayMatches")
+  tossWins       Match[]  @relation("TossWins")
+  battingInnings Inning[] @relation("BattingInnings")
+  bowlingInnings Inning[] @relation("BowlingInnings")
+  wins           Match[]  @relation("Wins")
+}
+
+model Match {
+  id               String      @id @default(uuid())
+  homeTeamId       String
+  awayTeamId       String
+  venue            String
+  matchDate        DateTime
+  tossWinnerTeamId String
+  choose           Choose
+  isCompleted      Boolean     @default(false)
+  winnerTeamId     String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  actions          ActionLog[]
+  home             Team        @relation("HomeMatches", fields: [homeTeamId], references: [id])
+  away             Team        @relation("AwayMatches", fields: [awayTeamId], references: [id])
+  tossWinnerTeam   Team        @relation("TossWins", fields: [tossWinnerTeamId], references: [id])
+  innings          Inning[]    @relation("Innings")
+  winnerTeam       Team        @relation("Wins", fields: [winnerTeamId], references: [id])
+}
+
+model Inning {
+  id            String @id @default(uuid())
+  matchId       String
+  battingTeamId String
+  bowlingTeamId String
+  overs         Over[] @relation("Overs")
+  match         Match  @relation("Innings", fields: [matchId], references: [id])
+  battingTeam   Team   @relation("BattingInnings", fields: [battingTeamId], references: [id])
+  bowlingTeam   Team   @relation("BowlingInnings", fields: [bowlingTeamId], references: [id])
+}
+
+model Over {
+  id         String @id @default(uuid())
+  overNumber Int
+  inningId   String
+  balls      Ball[]
+  inning     Inning @relation("Overs", fields: [inningId], references: [id])
+}
+
+model Ball {
+  id              String      @id @default(cuid())
+  overId          String
+  ballNumber      Int
+  strikerId       String
+  nonStrikerId    String?
+  bowlerId        String
+  outBatsmanId    String?
+  runs            Int         @default(0)
+  extras          ExtraType?
+  extraRuns       Int?
+  isWicket        Boolean     @default(false)
+  wicketType      WicketType?
+  fielderId       String?
+  assistFielderId String?
+  comment         String?
+  timestamp       DateTime    @default(now())
+  actionId        String?
+  over            Over        @relation(fields: [overId], references: [id])
+  striker         Player      @relation("Striker", fields: [strikerId], references: [id])
+  nonStriker      Player?     @relation("NonStriker", fields: [nonStrikerId], references: [id])
+  bowler          Player      @relation("Bowler", fields: [bowlerId], references: [id])
+  outBatsman      Player?     @relation("OutBatsman", fields: [outBatsmanId], references: [id])
+  fielder         Player?     @relation("Fielder", fields: [fielderId], references: [id])
+  assistFielder   Player?     @relation("AssistFielder", fields: [assistFielderId], references: [id])
+}
+
+model ActionLog {
+  id         String   @id @default(cuid())
+  matchId    String
+  actionType String // e.g. "ADD_BALL", "UNDO", etc.
+  payload    Json
+  reversed   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id])
+}
+
+// Enums
+enum Choose {
+  BAT
+  BOWL
+}
+
+enum Toss {
+  HOME
+  AWAY
+}
+
+enum Hand {
+  LEFT
+  RIGHT
+}
+
+enum Role {
+  BATSMAN
+  BOWLER
+  ALL_ROUNDER
+  WICKET_KEEPER
+}
+
+enum BowlingStyle {
+  FAST
+  MEDIUM_FAST
+  SPIN
+}
+
+enum WicketType {
+  BOWLED
+  CAUGHT
+  LBW
+  RUNOUT
+  STUMPED
+  HIT_WICKET
+  OBSTRUCTING_FIELD
+}
+
+enum ExtraType {
+  WIDE
+  NOBALL
+  BYE
+  LEG_BYE
+  PENALTY
+}
