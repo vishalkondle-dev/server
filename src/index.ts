@@ -3,6 +3,14 @@ import { bearerAuth } from "hono/bearer-auth";
 import { verify } from "hono/jwt";
 import { getPrisma } from "../lib/prisma";
 import authApp from "./auth";
+import { prettyJSON } from "hono/pretty-json";
+import playerApp from "./player";
+import playerTeamApp from "./playerTeam";
+import teamApp from "./team";
+import matchApp from "./match";
+import inningApp from "./inning";
+import overApp from "./over";
+import ballApp from "./ball";
 
 const app = new Hono<{
   Bindings: {
@@ -11,8 +19,19 @@ const app = new Hono<{
   };
 }>();
 
+app.use(prettyJSON());
+
 // Auth Routes
 app.route("/auth", authApp);
+
+// Routes
+app.route("/", playerApp);
+app.route("/", teamApp);
+app.route("/", playerTeamApp);
+app.route("/", matchApp);
+app.route("/", inningApp);
+app.route("/", overApp);
+app.route("/", ballApp);
 
 //! Auth MiddleWare
 app.use(

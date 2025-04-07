@@ -23,6 +23,7 @@ authApp.post("/register", async (c) => {
     // TODO - Send OTP to an email
     return c.json({ message: "Please enter an OTP sent to your Email" });
   } catch (error) {
+    console.log(error);
     return c.json({ error: "Something went wrong!" }, 401);
   }
 });
