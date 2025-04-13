@@ -1,8 +1,13 @@
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import { sign, verify } from "hono/jwt";
-import { EXPIRE_IN_15_MINS, EXPIRE_IN_7_DAYS } from "../lib/constants";
+import {
+  EXPIRE_IN_5_MINS,
+  EXPIRE_IN_15_MINS,
+  EXPIRE_IN_7_DAYS,
+} from "../lib/constants";
 import { getPrisma } from "../lib/prisma";
+import { generateRandomNumber } from "../lib/helpers";
 
 const authApp = new Hono<{
   Bindings: {
@@ -15,12 +20,12 @@ const authApp = new Hono<{
 // Login Route
 authApp.post("/register", async (c) => {
   try {
-    const { email, password, name } = await c.req.json();
+    const { mobile, name } = await c.req.json();
     const prisma = getPrisma(c.env.DATABASE_URL);
     await prisma.user.create({
-      data: { email, name, password },
+      data: { mobile, name },
     });
-    // TODO - Send OTP to an email
+    // TODO - Send OTP to an mobile
     return c.json({ message: "Please enter an OTP sent to your Email" });
   } catch (error) {
     console.log(error);
@@ -30,11 +35,12 @@ authApp.post("/register", async (c) => {
 
 // Login Route
 authApp.post("/login", async (c) => {
-  const { email, password } = await c.req.json();
+  const { mobile, otp } = await c.req.json();
   const prisma = getPrisma(c.env.DATABASE_URL);
   const user = await prisma.user.findUnique({
-    where: { email, password },
+    where: { mobile, otp },
   });
+  console.log({ user, mobile, otp });
   if (user) {
     const accessToken = await sign(
       { userId: user.id, exp: EXPIRE_IN_15_MINS, now: Date.now() },
@@ -53,7 +59,10 @@ authApp.post("/login", async (c) => {
       "Set-Cookie",
       `refresh_token=${refreshToken}; HttpOnly; Secure; Path=/; Max-Age=604800`
     );
-    return c.json({ message: "Login successful" });
+    return c.json({
+      message: "Login successful",
+      data: { ...user, accessToken },
+    });
   }
   return c.json({ error: "Invalid credentials" }, 401);
 });
@@ -118,6 +127,29 @@ authApp.get("/logout", async (c) => {
 
   c.header("Set-Cookie", `refresh_token=; HttpOnly; Secure; Path=/; Max-Age=0`);
   return c.json({ message: "Logged out" });
+});
+
+//
+authApp.post("/isRegistered", async (c) => {
+  try {
+    const { mobile } = await c.req.json();
+    const prisma = getPrisma(c.env.DATABASE_URL);
+    const user = await prisma.user.findUnique({ where: { mobile } });
+    if (user) {
+      // TODO - Send OTP to an mobile
+      const otp = generateRandomNumber(6);
+      console.log({ otp });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otp, otpExpiresAt: new Date(Date.now() + EXPIRE_IN_5_MINS) },
+      });
+      return c.json({ message: "User already registered", data: !!user });
+    }
+    return c.json({ message: "User not registered", data: !!user });
+  } catch (error) {
+    console.log(error);
+    return c.json({ error: "Something went wrong!" }, 401);
+  }
 });
 
 export default authApp;

@@ -11,6 +11,8 @@ import matchApp from "./match";
 import inningApp from "./inning";
 import overApp from "./over";
 import ballApp from "./ball";
+import scorerApp from "./scorer";
+import { cors } from "hono/cors";
 
 const app = new Hono<{
   Bindings: {
@@ -20,6 +22,7 @@ const app = new Hono<{
 }>();
 
 app.use(prettyJSON());
+app.use("/*", cors());
 
 // Auth Routes
 app.route("/auth", authApp);
@@ -32,6 +35,7 @@ app.route("/", matchApp);
 app.route("/", inningApp);
 app.route("/", overApp);
 app.route("/", ballApp);
+app.route("/", scorerApp);
 
 //! Auth MiddleWare
 app.use(

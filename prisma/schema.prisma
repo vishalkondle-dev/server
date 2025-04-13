@@ -17,8 +17,9 @@ datasource db {
 model User {
   id            String         @id @default(cuid())
   name          String
-  email         String         @unique
-  password      String
+  mobile        String         @unique
+  otp           String?
+  otpExpiresAt  DateTime?
   refreshTokens RefreshToken[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -65,6 +66,7 @@ model Team {
   battingInnings Inning[]     @relation("BattingInnings")
   bowlingInnings Inning[]     @relation("BowlingInnings")
   wins           Match[]      @relation("Wins")
+  tournaments    Tournament[] @relation("TournamentTeams")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -82,8 +84,12 @@ model PlayerTeam {
 
 model Match {
   id               String      @id @default(cuid())
+  tournamentId     String?
   homeTeamId       String?
   awayTeamId       String?
+  inningsPerTeam   Int         @default(1)
+  oversPerInning   Int
+  status           Status      @default(UPCOMING)
   venue            String
   matchDate        DateTime
   tossWinnerTeamId String?
@@ -96,6 +102,7 @@ model Match {
   tossWinnerTeam   Team?       @relation("TossWins", fields: [tossWinnerTeamId], references: [id])
   winnerTeam       Team?       @relation("Wins", fields: [winnerTeamId], references: [id])
   innings          Inning[]    @relation("Innings")
+  tournament       Tournament? @relation("TournamentMatches", fields: [tournamentId], references: [id])
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
@@ -105,6 +112,7 @@ model Inning {
   matchId       String
   battingTeamId String
   bowlingTeamId String
+  isInningsEnd  Boolean  @default(false)
   overs         Over[]   @relation("Overs")
   match         Match    @relation("Innings", fields: [matchId], references: [id])
   battingTeam   Team     @relation("BattingInnings", fields: [battingTeamId], references: [id])
@@ -151,15 +159,28 @@ model Ball {
   updatedAt       DateTime    @updatedAt
 }
 
+model Tournament {
+  id             String   @id @default(cuid())
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  oversPerInning Int
+  inningsPerTeam Int?     @default(1)
+  matches        Match[]  @relation("TournamentMatches")
+  teams          Team[]   @relation("TournamentTeams")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model ActionLog {
-  id         String   @id @default(cuid())
+  id         String     @id @default(cuid())
   matchId    String
-  actionType String // e.g. "ADD_BALL", "UNDO", etc.
+  actionType ActionType
   payload    Json
-  reversed   Boolean  @default(false)
-  match      Match    @relation(fields: [matchId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  reversed   Boolean    @default(false)
+  match      Match      @relation(fields: [matchId], references: [id])
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 }
 
 // Enums
@@ -207,4 +228,30 @@ enum ExtraType {
   BYE
   LEG_BYE
   PENALTY
+}
+
+enum Status {
+  UPCOMING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DRAWS
+}
+
+enum ActionType {
+  ADD_BALL // A new ball is added
+  UNDO // Undo last action (usually a ball)
+  REDO // Redo an undone action
+  ADD_MATCH // New match created
+  UPDATE_MATCH // Match metadata changed
+  ADD_PLAYER // New player added to the system
+  UPDATE_PLAYER // Player info updated
+  ADD_TEAM // New team added
+  UPDATE_TEAM // Team info updated
+  ADD_OVER // New over started
+  END_OVER // Over completion
+  START_INNING // Start of a new inning
+  END_INNING // End of an inning
+  SET_TOSS // Toss result saved
+  SET_WINNER // Match result updated
 }
