@@ -13,6 +13,7 @@ import overApp from "./over";
 import ballApp from "./ball";
 import scorerApp from "./scorer";
 import { cors } from "hono/cors";
+import smsApp from "./sms";
 
 const app = new Hono<{
   Bindings: {
@@ -36,6 +37,8 @@ app.route("/", inningApp);
 app.route("/", overApp);
 app.route("/", ballApp);
 app.route("/", scorerApp);
+app.route("/", smsApp);
+// app.use('/send-otp', smsApp);
 
 //! Auth MiddleWare
 app.use(
