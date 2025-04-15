@@ -6,31 +6,30 @@ import {
   EXPIRE_IN_5_MINS,
   EXPIRE_IN_7_DAYS,
 } from "../lib/constants";
+import { sendEmail } from "../lib/email";
 import { generateRandomNumber } from "../lib/helpers";
 import { getPrisma } from "../lib/prisma";
-import { addPhoneNumber, sendSms } from "../lib/sms";
 
 const authApp = new Hono<{
   Bindings: {
     DATABASE_URL: string;
     JWT_ACCESS_SECRET: string;
     JWT_REFRESH_SECRET: string;
-    AWS_ACCESS_KEY_ID: string;
-    AWS_SECRET_ACCESS_KEY: string;
+    SERVICES_URL: string;
   };
 }>();
 
 // Login Route
 authApp.post("/register", async (c) => {
   try {
-    const { mobile, name, otp } = await c.req.json();
+    const { email, name, otp } = await c.req.json();
     const prisma = getPrisma(c.env.DATABASE_URL);
-    const isOtpValid = await prisma.otp.findUnique({ where: { mobile, otp } });
+    const isOtpValid = await prisma.otp.findUnique({ where: { email, otp } });
     if (!isOtpValid) {
       return c.json({ error: "Invalid OTP" }, 401);
     }
     await prisma.user.create({
-      data: { mobile, name },
+      data: { email, name },
     });
     return c.json({ message: "User registered successfully" });
   } catch (error) {
@@ -41,13 +40,20 @@ authApp.post("/register", async (c) => {
 
 // Login Route
 authApp.post("/login", async (c) => {
-  const { mobile, otp } = await c.req.json();
+  const body = await c.req.json();
+  const { email, otp } = body;
   const prisma = getPrisma(c.env.DATABASE_URL);
-  const isOtpValid = await prisma.otp.findUnique({ where: { mobile, otp } });
+  const isOtpValid = await prisma.otp.findUnique({ where: { email, otp } });
   if (!isOtpValid) {
     return c.json({ error: "Invalid OTP" }, 401);
   }
-  const user = await prisma.user.findUnique({ where: { mobile } });
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user && isOtpValid) {
+    await prisma.user.create({
+      data: { email, name: body?.name },
+    });
+    user = await prisma.user.findUnique({ where: { email } });
+  }
   if (user) {
     const accessToken = await sign(
       { userId: user.id, exp: EXPIRE_IN_15_MINS, now: Date.now() },
@@ -139,45 +145,32 @@ authApp.get("/logout", async (c) => {
 // Check if user is registered
 authApp.post("/isRegistered", async (c) => {
   try {
-    const { mobile } = await c.req.json();
+    const { email } = await c.req.json();
     const prisma = getPrisma(c.env.DATABASE_URL);
-    const user = await prisma.user.findUnique({ where: { mobile } });
+    const user = await prisma.user.findUnique({ where: { email } });
     const otp = generateRandomNumber(6);
     const updateOtp = async () => {
-      const lastOtp = await prisma.otp.findFirst({ where: { mobile } });
+      const lastOtp = await prisma.otp.findFirst({ where: { email } });
       if (lastOtp) {
         await prisma.otp.update({
-          where: { mobile },
+          where: { email },
           data: { otp, otpExpiresAt: new Date(Date.now() + EXPIRE_IN_5_MINS) },
         });
       } else {
         await prisma.otp.create({
           data: {
-            mobile,
+            email,
             otp,
             otpExpiresAt: new Date(Date.now() + EXPIRE_IN_5_MINS),
           },
         });
       }
     };
+    await sendEmail(email, otp, c.env.SERVICES_URL);
+    await updateOtp();
     if (user) {
-      // TODO - Send OTP to an mobile
-      const response = await sendSms(
-        `+91${user.mobile}`,
-        `Hi ${user.name}, ${otp} is your verification code`,
-        c.env.AWS_ACCESS_KEY_ID,
-        c.env.AWS_SECRET_ACCESS_KEY
-      );
-      console.log({ response });
-      await updateOtp();
       return c.json({ message: "User already registered", data: !!user });
     }
-    await addPhoneNumber(
-      `+91${mobile}`,
-      c.env.AWS_ACCESS_KEY_ID,
-      c.env.AWS_SECRET_ACCESS_KEY
-    );
-    await updateOtp();
     return c.json({ message: "User not registered", data: !!user });
   } catch (error) {
     console.log(error);
